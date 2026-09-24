@@ -21,8 +21,16 @@ app.use(cors({
   credentials: true
 }));
 
-//db connection
-connectDB()
+// Connect on demand. A module-level connection is reused by warm Vercel functions.
+app.use("/api", async (req, res, next) => {
+    try {
+        await connectDB();
+        next();
+    } catch (error) {
+        console.error("Database connection failed:", error.message);
+        res.status(503).json({ success: false, message: "Database unavailable" });
+    }
+});
 
 // api endpoint
 app.use("/api/food",foodRouter)

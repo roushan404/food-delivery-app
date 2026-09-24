@@ -2,22 +2,32 @@ import orderModel from "../models/orderModel.js";
 import userModel from "../models/userModel.js"
 import Stripe from "stripe"
 
-const stripe =new Stripe(process.env.STRIPE_SECRET_KEY)
+const getStripeClient = () => {
+    if (!process.env.STRIPE_SECRET_KEY) {
+        throw new Error("STRIPE_SECRET_KEY is not defined in environment variables");
+    }
+
+    return new Stripe(process.env.STRIPE_SECRET_KEY);
+};
 
 // placing user order from frontend
 const placeOrder = async (req,res) => {
-    
-    const frontend_url = process.env.FRONTEND_URL
-
+    let newOrder;
     try {
-        const newOrder =new orderModel({
+        const stripe = getStripeClient();
+        const frontendUrl = (process.env.FRONTEND_URL || req.get("origin") || "").replace(/\/$/, "");
+
+        if (!/^https?:\/\/.+/.test(frontendUrl)) {
+            throw new Error("FRONTEND_URL must be set to the deployed frontend URL");
+        }
+
+        newOrder =new orderModel({
             userId:req.body.userId,
             items:req.body.items,
             amount:req.body.amount,
             address:req.body.address
         })
         await newOrder.save()
-        await userModel.findByIdAndUpdate(req.body.userId,{cartData:{}})
 
         const line_items=req.body.items.map((item)=>({
                 price_data:{
@@ -44,16 +54,20 @@ const placeOrder = async (req,res) => {
         const session = await stripe.checkout.sessions.create({
             line_items:line_items,
             mode:'payment',
-            success_url:`${frontend_url}/verify?success=true&orderId=${newOrder._id}`,
-            cancel_url:`${frontend_url}/verify?success=false&orderId=${newOrder._id}`
+            success_url:`${frontendUrl}/verify?success=true&orderId=${newOrder._id}`,
+            cancel_url:`${frontendUrl}/verify?success=false&orderId=${newOrder._id}`
         })
 
+        await userModel.findByIdAndUpdate(req.body.userId,{cartData:{}})
         res.json({success:true,session_url:session.url})
 
 
     } catch (error) {
         console.log(error)
-        res.json({success:false,message:"ERROR"})
+        if (newOrder?._id) {
+            await orderModel.findByIdAndDelete(newOrder._id).catch(() => {});
+        }
+        res.status(500).json({success:false,message:error.message || "Unable to start checkout"})
     }
 }
 

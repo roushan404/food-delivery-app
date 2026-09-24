@@ -28,10 +28,9 @@ const PlaceOrder = () => {
     const placeOrder =async (event) => {
       event.preventDefault();
       let orderItems =[];
-      food_list.map((item)=>{
+      food_list.forEach((item)=>{
         if(cartItems[item._id]>0){
-          let itemInfo =item
-          itemInfo["quantity"] = cartItems[item._id];
+          const itemInfo = { ...item, quantity: cartItems[item._id] };
           orderItems.push(itemInfo)
         }
       })
@@ -40,13 +39,16 @@ const PlaceOrder = () => {
         items:orderItems,
         amount:getTotalCartAmount()+2,
       }
-      let response = await axios.post(url+"/api/order/place",orderData,{headers:{token}})
-      if(response.data.success){
-        const {session_url} =response.data;
-        window.location.replace(session_url)
-      }
-      else{
-        alert("Error")
+      try {
+        const response = await axios.post(url+"/api/order/place",orderData,{headers:{token}})
+        if(response.data.success && response.data.session_url){
+          window.location.replace(response.data.session_url)
+        }
+        else{
+          alert(response.data.message || "Unable to start checkout")
+        }
+      } catch (error) {
+        alert(error.response?.data?.message || "Unable to start checkout. Please try again.")
       }
     }
 
