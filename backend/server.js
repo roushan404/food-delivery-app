@@ -16,7 +16,10 @@ const port=process.env.PORT || 4000
 
 //middleware
 app.use(express.json())
-app.use(cors())
+app.use(cors({
+  origin: true, // Dynamically sets Access-Control-Allow-Origin to the exact requester origin
+  credentials: true
+}));
 
 //db connection
 connectDB()
